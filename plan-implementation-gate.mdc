@@ -1,0 +1,91 @@
+---
+description: Gated step-by-step implementation from approved plans — one minimal step at a time, user approval required before each next step
+alwaysApply: true
+---
+
+# Plan → Agent Implementation Gate
+
+**Activates when:** the user asks to implement a feature from a plan (e.g. `.cursor/plans/*.plan.md`), says **"implement next step"**, **"start implementation"**, or continues an in-progress plan-driven build.
+
+**Does not apply to:** questions, reviews, debugging, or tasks with no plan reference — proceed normally.
+
+---
+
+## 1. Split into minimal steps first
+
+Before writing or editing any code:
+
+1. Read the referenced plan (especially **§7 Refactor / Todo list** and **§8 Testing**).
+2. Break work into the **smallest independent steps** possible — ideally **one file or one logical change per step** (migration, one DTO, one service method, one controller, one test file).
+3. Respect dependency order (DB → model → shared logic → domain API → tests).
+4. Post a numbered **Implementation Steps** list. Each step must include:
+   - **Step N** — short title
+   - **Files** — exact paths (and symbols/line ranges when known)
+   - **Change** — what differs after the step
+   - **Out of scope for this step** — what you will **not** touch yet
+
+**Do not implement anything until the user approves the step list or a specific step.**
+
+---
+
+## 2. One step per turn — user approval required
+
+- Implement **only the step the user explicitly approved** (e.g. *"approve step 1"*, *"implement step 2"*, *"go ahead with step 1"*).
+- If the user approves the full list without naming a step, implement **Step 1 only**.
+- Never batch multiple steps in one turn unless the user explicitly approves a range (e.g. *"implement steps 1–3"*).
+
+---
+
+## 3. Hard stop after each step
+
+When a step is done, **stop immediately**. End the turn with:
+
+1. **Completed:** what was done (files changed, brief summary)
+2. **Not done:** remaining steps (numbered)
+3. **Prompt:** *"Reply **implement next step** (or **implement step N**) to continue."*
+
+### Forbidden until the user confirms the next step
+
+- Starting or implementing the next step
+- Editing files outside the approved step (including "small follow-ups", "while we're here", or preparatory changes for later steps)
+- Refactoring unrelated code
+- Adding tests for later steps
+- Committing, pushing, or opening PRs (unless the user explicitly asked in the same message)
+- Proposing or executing work beyond the approved step — including extended planning for later steps beyond a one-line reminder in the stop summary
+
+**Exception:** read-only exploration of files strictly needed to complete the **current approved step** is allowed.
+
+---
+
+## 4. Step sizing guide
+
+| Good (one step) | Too large (split further) |
+|-----------------|---------------------------|
+| One migration file | Migration + model + DTO in one step |
+| One DTO field + validation | All v1 + v2 DTOs unless user approves both |
+| One method in one service | Entire shared service rewrite |
+| Tests for one approved step | Full §8 test matrix in one step |
+
+When a plan todo spans multiple files, split by layer or by API version only when the user approves grouped steps.
+
+---
+
+## 5. Example flow
+
+**User:** Implement from `.cursor/plans/my-feature.plan.md`
+
+**Agent:** Posts Implementation Steps 1–12 (minimal), asks which step to approve.
+
+**User:** Approve step 1
+
+**Agent:** Implements migration only → stops → asks for **implement next step**.
+
+**User:** implement next step
+
+**Agent:** Implements step 2 only → stops again.
+
+---
+
+## 6. Conflicts with the plan
+
+If implementation reveals a plan gap or conflict, **stop**, report it, and wait for user direction. Do not silently expand scope or skip ahead to "fix" later steps.
