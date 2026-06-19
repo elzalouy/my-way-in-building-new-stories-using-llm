@@ -1,0 +1,173 @@
+---
+description: Local API endpoint testing — DTO discovery, gap analysis, terminal requests against localhost + dev DB from .env, behavior report
+alwaysApply: false
+---
+
+# API Endpoint Dev Testing
+
+**Activates when:** user asks to test API endpoints, validate an API against business rules, run dev integration checks, or build a case matrix for a feature/flow.
+
+**Companion docs (create in your repo):** `.cursor/references/env.md`, `.cursor/templates/api-test-report.template.md`
+
+---
+  
+## Local API only (mandatory)
+
+1. **Base URL** — always the **local** server: `http://127.0.0.1:${PORT}` (default port **3000**), or `LOCAL_API_BASE_URL` from `.env` if set.
+2. **Never** use remote/staging/prod hosts for test HTTP requests — only localhost.
+3. **DB** — loaded from `.env` (`DB_HOST`, `DB_NAME`, …) for fixtures and post-request verification.
+4. **Prerequisite** — confirm local server is running before Phase 4; abort with a clear message if localhost is unreachable — do not switch to remote.
+
+---
+
+## Safety first
+
+1. Read credentials from project root **`.env`** only at runtime — never commit or echo secrets.
+2. Confirm **dev** `DB_HOST` / `DB_NAME` before mutating data.
+3. Label destructive cases in the report; prefer disposable test entities from DB queries.
+
+---
+
+## Workflow (execute in order)
+
+### Phase 1 — Discover endpoints & contracts
+
+For each endpoint in scope:
+
+1. **Controller** — find the route handler (framework-specific: e.g. `@Controller`, router file, handler module).
+2. **Route prefix** — full path including version prefix.
+3. **DTOs / request schema** — required/optional fields, enums, defaults, transforms, array vs scalar quirks.
+4. **Guards / middleware** — auth header format, role requirements.
+5. **Service** — validation, branching, thrown errors / translation keys.
+6. **Business source** — plan docs, tickets, or user story acceptance criteria.
+
+**Output:** endpoint inventory table (method, full path, auth, request shape, response wrapper).
+
+**Edge cases to derive:**
+
+- Required field missing / empty / wrong type
+- Enum boundary values
+- Optional omitted vs explicit null/default
+- FK ids: valid, invalid, wrong parent scope, soft-deleted row
+- Auth: missing token, expired, wrong role
+- Business rules from service (visibility, state transitions, quotas)
+- Pagination / filter defaults
+- Idempotency / duplicate create
+
+---
+
+### Phase 2 — Gap analysis (business vs technical)
+
+Build a matrix:
+
+| Business need | Code location | Delivered? | Gap |
+|---------------|---------------|------------|-----|
+
+Flag:
+
+- Missing validation or wrong error key / i18n
+- Response missing fields the client/plan expects
+- Plan §8 / acceptance criteria not enforced in service
+- DTO allows what service rejects (or vice versa)
+- Undocumented defaults (feature flags, include-inactive, etc.)
+
+**Output:** gap table + short summary before running requests.
+
+---
+
+### Phase 3 — Build test cases
+
+Create under `.cursor/api-testing/{feature-slug}/`:
+
+**`cases.json`** — one object per case:
+
+```json
+{
+  "id": "C01",
+  "category": "happy",
+  "method": "POST",
+  "path": "/api/v1/...",
+  "headers": { "Authorization": "{{AUTH_TOKEN}}", "Content-Type": "application/json" },
+  "body": {},
+  "query": {},
+  "expectedStatus": 201,
+  "expectedBehavior": "Creates resource with valid parent",
+  "businessRef": "plan §8 C1"
+}
+```
+
+**Data setup:** query dev DB for real ids; document SQL in `setup.sql` or inline in report. Sign tokens with your project's secret — payload must match auth guard expectations.
+
+**Coverage minimum per endpoint:**
+
+- 1 happy path
+- Each validation rule from service/plan
+- 1 auth failure
+- 1 relevant edge case from Phase 1
+
+---
+
+### Phase 4 — Runnable terminal requests
+
+Create **`run.sh`** (or `run.mjs`) that:
+
+1. Loads `.env` from repo root
+2. Sets base URL to localhost — **not** any remote `BASE_URL` / production host
+3. Verifies localhost responds before running cases (e.g. `curl --connect-timeout 3`); stop if down
+4. Resolves `{{AUTH_TOKEN}}` once
+5. Loops `cases.json` and runs each case
+6. Saves raw response + status to `logs/{caseId}.json`
+
+**Prefer `curl`** for portability:
+
+```bash
+set -a && source .env && set +a
+LOCAL_API_BASE_URL="${LOCAL_API_BASE_URL:-http://127.0.0.1:${PORT:-3000}}"
+
+curl -sS -w "\n%{http_code}" -X POST \
+  -H "Authorization: ${AUTH_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d @".cursor/api-testing/{feature}/payloads/C01.json" \
+  "${LOCAL_API_BASE_URL}/api/v1/..."
+```
+
+**Agent must run the script** via Shell tool and capture output — do not only generate files.
+
+---
+
+### Phase 5 — Report
+
+Copy your report template to:
+
+`.cursor/reports/api-test-{feature-slug}-{YYYY-MM-DD}.md`
+
+For **each case** fill:
+
+| Column | Content |
+|--------|---------|
+| Expected behavior | From plan / DTO / business rule |
+| Actual behavior | HTTP status + message/key + relevant response fields |
+| Match? | ✅ if status + behavior align; ❌ otherwise |
+| Notes | DB state, gap id, i18n key observed |
+
+Link failures to Phase 2 gaps and suggest file-level fixes.
+
+Deliver the report path to the user when done.
+
+---
+
+## Response shape
+
+Document your project's standard envelope once (e.g. `{ statusCode, message, data }` or raw JSON). Record both machine keys and resolved text when i18n is used.
+
+---
+
+## Checklist before finishing
+
+- [ ] Local server confirmed running on `http://127.0.0.1:{PORT}` (not remote)
+- [ ] All scoped endpoints inventoried
+- [ ] Gap analysis written
+- [ ] Cases cover happy + validation + auth + business edges
+- [ ] `run.sh` / `run.mjs` executed; logs saved
+- [ ] Report lists every case: expected vs actual vs match
+- [ ] No secrets in report or committed artifacts
