@@ -1,0 +1,64 @@
+---
+description: Standard structure and order for all implementation plans
+alwaysApply: true
+---
+
+# Planning Rule
+
+When creating or updating any plan (`.cursor/plans/*.plan.md`, inline planning, or architecture docs), use **exactly this section order**:
+
+## 1. Problem to Solve
+
+State the business/technical problem, current pain, and success criteria. No solutions yet.
+
+## 2. Solutions
+
+List viable approaches. Brief pros/cons per option. Call out the **recommended** solution.
+
+## 3. Solution Gaps
+
+For each solution (or the chosen one), document what is missing, risky, ambiguous, or unverified in the codebase today.
+
+## 4. DB Changes
+
+Migrations, new columns/tables/indexes, model updates, backfill strategy, rollback notes.
+
+## 5. APIs, DTOs & Responses
+
+Endpoints affected (path + version), request/response shape changes, breaking vs backward-compatible behavior.
+
+## 6. Business Logic Changes
+
+Services, queues, shared logic, validation rules, and cross-cutting flows touched by the change.
+
+## 7. Refactor Needed?
+
+Answer **yes** or **no**. If **yes**, cover:
+
+- Scalability risks and required changes
+- Dependency upgrade blockers or required bumps
+- Configuration & feature-flag changes
+- Data migrations & schema-evolution risks
+
+Then add a **minimalist Todo list**. Each item must include:
+
+| Field | Content |
+|-------|---------|
+| **Location** | File path + relevant line range(s) or symbol |
+| **Change** | What differs after the work |
+| **Action** | Concrete step (add field, extract method, migrate, etc.) |
+| **Reason** | Why this item is required |
+
+Example todo item:
+
+```markdown
+- [ ] `src/.../foo.service.ts` L42–58 — **Change:** filter by `isActive` — **Action:** add where clause in `listItems()` — **Reason:** public API must not expose inactive records
+```
+
+## 8. Testing Coverage
+
+Normal cases and edge cases: unit/integration/e2e targets, fixtures, and regression areas.
+
+---
+
+**Do not** reorder sections. **Do not** skip a section — write "None" or "N/A" when empty. Keep prose concise; prefer tables and bullet lists over long paragraphs.
